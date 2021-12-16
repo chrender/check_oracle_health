@@ -90,6 +90,22 @@ sub init {
     } else {
       $self->add_nagios_critical("unable to aquire user info");
     }
+  } elsif ($params{mode} =~ /server::database::userload/) {
+    my $testDuration = 5;
+
+    my $numCPUs= $self->{handle}->fetchrow_array(q{
+     SELECT SUM(value) FROM sys.gv_$parameter WHERE name='cpu_count'
+    });
+
+    my $first = $self->{handle}->fetchrow_array(q{
+     SELECT SUM(value) microsecs FROM sys.gV_$SYS_TIME_MODEL WHERE stat_name = 'DB CPU'
+    });
+    sleep($testDuration);
+    my $second = $self->{handle}->fetchrow_array(q{
+     SELECT SUM(value) MICROSECS FROM sys.gV_$SYS_TIME_MODEL WHERE stat_name = 'DB CPU'
+    });
+
+    $self->{user_load} = ($second - $first) / ($testDuration*1000*1000) / $numCPUs * 100;
   }
 }
 
@@ -640,6 +656,11 @@ sub nagios {
         $_->nagios(%params);
         $self->merge_nagios($_);
       }
+    } elsif ($params{mode} =~ /server::database::userload/) {
+      my $userload = $self->{user_load};
+      $self->add_nagios(
+          $self->check_thresholds($userload, 60, 80),
+          sprintf "%f%% Average user load", $userload);
     }
   }
 }
