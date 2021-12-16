@@ -179,10 +179,16 @@ sub nagios {
   } elsif ($params{mode} =~ /server::instance::session::usage/) {
       $self->{session_usage} =
           $DBD::Oracle::Server::Instance::Session::session_usage;
+      $self->{sessions_available} =
+          $DBD::Oracle::Server::Instance::Session::sessions_available;
+      $self->{sessions_in_use} =
+          $DBD::Oracle::Server::Instance::Session::sessions_in_use;
       $self->add_nagios(
           $self->check_thresholds($self->{session_usage}, 80, 100),
-          sprintf "%.2f%% of session resources used",
-              $self->{session_usage});
+          sprintf "%.2f%%, %d of %d of sessions used",
+              $self->{session_usage},
+              $self->{sessions_in_use},
+              $self->{sessions_available});
       $self->add_perfdata(sprintf "session_usage=%.2f%%;%d;%d",
           $self->{session_usage},
           $self->{warningrange}, $self->{criticalrange});

@@ -11,6 +11,8 @@ my %ERRORCODES=( 0 => 'OK', 1 => 'WARNING', 2 => 'CRITICAL', 3 => 'UNKNOWN' );
   our @sessions = ();
   our $initerrors = undef;
   our $session_usage = 0;
+  our $sessions_in_use = 0;
+  our $sessions_available = 0;
 
   sub add_session {
     push(@sessions, shift);
@@ -25,15 +27,13 @@ my %ERRORCODES=( 0 => 'OK', 1 => 'WARNING', 2 => 'CRITICAL', 3 => 'UNKNOWN' );
     my %params = @_;
     my $num_sessions = 0;
     if ($params{mode} =~ /server::instance::session::usage/) {
-      $session_usage = $params{handle}->fetchrow_array(q{
-          SELECT
-              current_utilization / limit_value * 100
-          FROM
-              v$resource_limit
-          WHERE
-              resource_name = 'sessions'
-          -- FROM v$resource_limit WHERE resource_name LIKE '%sessions%'
+      $sessions_in_use = $params{handle}->fetchrow_array(q{
+        SELECT COUNT(*) FROM gv$session WHERE username IS NOT NULL
       });
+      $sessions_available = $params{handle}->fetchrow_array(q{
+        SELECT SUM(value) FROM sys.gv_$parameter WHERE name='sessions'
+      });
+      $session_usage = $sessions_in_use / $sessions_available * 100;
       if (! defined $session_usage) {
         $initerrors = 1;
         return undef;
