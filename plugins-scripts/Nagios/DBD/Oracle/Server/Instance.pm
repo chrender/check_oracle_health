@@ -81,10 +81,14 @@ sub init {
           start_time > sysdate-3
     });
   } elsif ($params{mode} =~ /server::instance::processusage/) {
-    $self->{process_usage} = $self->{handle}->fetchrow_array(q{
-        SELECT current_utilization/limit_value*100 
-        FROM v$resource_limit WHERE resource_name LIKE '%processes%'
+    $self->{processes_in_use} = $params{handle}->fetchrow_array(q{
+      SELECT COUNT(*) FROM gv$process
     });
+    $self->{processes_available} = $params{handle}->fetchrow_array(q{
+      SELECT SUM(value) FROM sys.gv_$parameter WHERE name='processes'
+    });
+    $self->{process_usage}
+      = $self->{processes_in_use} / $self->{processes_available} * 100;
   } elsif ($params{mode} =~ /server::instance::jobs::failed/) {
     @{$self->{failed_jobs}} = $self->{handle}->fetchall_array(q{
         SELECT
@@ -208,7 +212,10 @@ sub nagios {
       $self->add_nagios(
           $self->check_thresholds($self->{process_usage}, 80, 100),
           sprintf "%.2f%% of process resources used",
-              $self->{process_usage});
+          sprintf "%.2f%%, %d of %d of process resources used",
+              $self->{process_usage},
+              $self->{processes_in_use},
+              $self->{processes_available});
       $self->add_perfdata(sprintf "process_usage=%.2f%%;%d;%d",
           $self->{process_usage},
           $self->{warningrange}, $self->{criticalrange});
