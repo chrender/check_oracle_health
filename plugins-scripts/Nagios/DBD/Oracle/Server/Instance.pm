@@ -211,7 +211,6 @@ sub nagios {
   } elsif ($params{mode} =~ /server::instance::processusage/) {
       $self->add_nagios(
           $self->check_thresholds($self->{process_usage}, 80, 100),
-          sprintf "%.2f%% of process resources used",
           sprintf "%.2f%%, %d of %d of process resources used",
               $self->{process_usage},
               $self->{processes_in_use},
