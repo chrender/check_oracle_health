@@ -90,8 +90,11 @@ sub init {
     } else {
       $self->add_nagios_critical("unable to aquire user info");
     }
-  } elsif ($params{mode} =~ /server::database::userload/) {
+  } elsif ($params{mode} =~ /server::database::userload/ ||
+      $params{mode} =~ /server::database::load/) {
     my $testDuration = 5;
+    my $firstBackground = 0;
+    my $secondBackground = 0;
 
     my $numCPUs= $self->{handle}->fetchrow_array(q{
      SELECT SUM(value) FROM sys.gv_$parameter WHERE name='cpu_count'
@@ -100,12 +103,25 @@ sub init {
     my $first = $self->{handle}->fetchrow_array(q{
      SELECT SUM(value) microsecs FROM sys.gV_$SYS_TIME_MODEL WHERE stat_name = 'DB CPU'
     });
+    if ($params{mode} =~ /server::database::load/) {
+      my $firstBackground = $self->{handle}->fetchrow_array(q{
+       SELECT SUM(value) FROM sys.gV_$SYS_TIME_MODEL WHERE stat_name = 'background cpu time'
+      });
+    }
     sleep($testDuration);
     my $second = $self->{handle}->fetchrow_array(q{
      SELECT SUM(value) MICROSECS FROM sys.gV_$SYS_TIME_MODEL WHERE stat_name = 'DB CPU'
     });
+    if ($params{mode} =~ /server::database::load/) {
+      my $secondBackground = $self->{handle}->fetchrow_array(q{
+       SELECT SUM(value) FROM sys.gV_$SYS_TIME_MODEL WHERE stat_name = 'background cpu time'
+      });
+    }
 
     $self->{user_load} = ($second - $first) / ($testDuration*1000*1000) / $numCPUs * 100;
+    if ($params{mode} =~ /server::database::load/) {
+      $self->{load} = (($secondBackground - $firstBackground) + ($second - $first)) / ($testDuration*1000*1000) / $numCPUs * 100;
+    }
   }
 }
 
@@ -661,6 +677,11 @@ sub nagios {
       $self->add_nagios(
           $self->check_thresholds($userload, 60, 80),
           sprintf "%f%% Average user load", $userload);
+    } elsif ($params{mode} =~ /server::database::load/) {
+      my $load = $self->{load};
+      $self->add_nagios(
+          $self->check_thresholds($load, 60, 80),
+          sprintf "%f%% Average load", $load);
     }
   }
 }
